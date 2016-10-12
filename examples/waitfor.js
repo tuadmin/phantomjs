@@ -1,58 +1,101 @@
 /**
- * Wait until the test condition is true or a timeout occurs. Useful for waiting
- * on a server response or for a ui change (fadeIn, etc.) to occur.
- *
- * @param testFx javascript condition that evaluates to a boolean,
- * it can be passed in as a string (e.g.: "1 == 1" or "$('#bar').is(':visible')" or
- * as a callback function.
- * @param onReady what to do when testFx condition is fulfilled,
- * it can be passed in as a string (e.g.: "1 == 1" or "$('#bar').is(':visible')" or
- * as a callback function.
- * @param timeOutMillis the max amount of time to wait. If not specified, 3 sec is used.
+ * @version 1
+ * @author tuadmin
  */
+/*//for use in module
 
-"use strict";
-function waitFor(testFx, onReady, timeOutMillis) {
-    var maxtimeOutMillis = timeOutMillis ? timeOutMillis : 3000, //< Default Max Timout is 3s
-        start = new Date().getTime(),
-        condition = false,
-        interval = setInterval(function() {
-            if ( (new Date().getTime() - start < maxtimeOutMillis) && !condition ) {
-                // If not time-out yet and condition not yet fulfilled
-                condition = (typeof(testFx) === "string" ? eval(testFx) : testFx()); //< defensive code
-            } else {
-                if(!condition) {
-                    // If condition still not fulfilled (timeout but condition is 'false')
-                    console.log("'waitFor()' timeout");
-                    phantom.exit(1);
-                } else {
-                    // Condition fulfilled (timeout and/or condition is 'true')
-                    console.log("'waitFor()' finished in " + (new Date().getTime() - start) + "ms.");
-                    typeof(onReady) === "string" ? eval(onReady) : onReady(); //< Do what it's supposed to do once the condition is fulfilled
-                    clearInterval(interval); //< Stop this interval
-                }
-            }
-        }, 250); //< repeat check every 250ms
-};
-
-
-var page = require('webpage').create();
-
-// Open Twitter on 'sencha' profile and, onPageLoad, do...
-page.open("http://twitter.com/#!/sencha", function (status) {
-    // Check for page load success
-    if (status !== "success") {
-        console.log("Unable to access network");
-    } else {
-        // Wait for 'signin-dropdown' to be visible
-        waitFor(function() {
-            // Check in the page if a specific element is now visible
-            return page.evaluate(function() {
-                return $("#signin-dropdown").is(":visible");
-            });
-        }, function() {
-           console.log("The sign-in dialog should be visible now.");
-           phantom.exit();
-        });
+function $promise(obj_parent){
+	var thens  =[];
+	var catchs =[];
+    var finallys=[];
+    this._ = obj_parent?obj_parent:this;
+	this.then=function(then_callback,fail_callback){
+		if(then_callback){
+            thens.push(then_callback);
+        }
+        return fail_callback?this.catch(fail_callback):this;
+	};
+	this.catch=function(_callback){
+		if(_callback){
+            catchs.push(_callback);
+        }
+        return this;
+	};
+	this.finally=function(_callback){
+		if(_callback){
+            finallys.push(_callback);
+        }
+        return this;
+	};
+	
+	this.resolve=function(data){
+        while(thens.length){
+            thens.shift()(data);
+        }
+        catchs=[];
+        while(finallys.length){
+            finallys.shift()(data);
+        }
+    };
+	this.reject=function(data){
+        while(catchs.length){
+            catchs.shift()(data);
+        }
+        thens=[];
+        while(finallys.length){
+            finallys.shift()(data);
+        }
     }
+};
+*/
+
+exports.create=function(_callback_check,timeOutMillis,check_calllback_in_seconds){
+    var checkLoop = check_calllback_in_seconds?check_calllback_in_seconds:250  ,
+        maxtimeOutMillis = timeOutMillis ? timeOutMillis : 3000, //< Default Max Timout is 3s
+        my_promise= new $promise(this),
+        limit = new Date().getTime() + maxtimeOutMillis,
+        end_ok=false,
+        finish=false,
+        condition = false,
+        current_timeout=null;
+    function end(){
+        if(timeout_control){clearTimeout(timeout_control);}
+        if(current_timeout){clearTimeout(current_timeout);}
+        if(end_ok){//se termino por las buenas
+                        
+        }else{//se termino por que vencio el tiempo
+            my_promise.reject('Timeout ' + timeOutMillis);
+        }
+    };
+    current_timeout=function(){
+        condition = (typeof(_callback_check) === "string" ? eval(_callback_check) : _callback_check( limit-new Date().getTime() ) );
+        if(condition){
+            my_promise.resolve(condition);
+            end_ok=true;
+            finish=true;
+            end();
+        }else if(finish==false ){
+            timeout_control= setTimeout(current_timeout,checkLoop);
+        }
+    };
+    current_timeout();//iniamos la primera comprobacion
+    timeout_control= setTimeout(function(){
+            end();
+    },maxtimeOutMillis);
+    return my_promise;
+};
+/*example use*/
+/*
+var timeout    = 5000;//micro seconds
+    time_check = 1000;//micro seconds
+var waitfor = new require('waitfor').create(function(seconds_restant ){ console.log("restant " +seconds_restant); },timeout,time_check);
+waitfor.then(function(){
+    console.log("only show if (check_function) return true");
 });
+waitfor.catch(function(error_messsage){
+            console.log(error_messsage);
+        })
+        .finally(function(){
+            console.log("this message is ever show");
+        });
+*/
